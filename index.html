@@ -2,68 +2,54 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Auto Chat Web</title>
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+  <title>Chat</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
-    #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 10px; }
-    #msg { width: 80%; padding: 5px; }
-    #send { padding: 5px 10px; }
-    .system { color: gray; font-style: italic; }
-    .message { margin-bottom: 5px; }
+    #messages { list-style: none; padding: 0; max-height: 300px; overflow-y: auto; }
+    #messages li { padding: 5px; border-bottom: 1px solid #ddd; }
+    #msg { padding: 5px; width: 200px; }
+    button { padding: 5px 10px; }
   </style>
 </head>
 <body>
-  <h1>Auto Chat Web</h1>
-  <div id="chat"></div>
-  <input id="msg" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage()">
-  <button id="send" onclick="sendMessage()">Send</button>
+  <h1>Socket.IO Chat</h1>
+  <input id="msg" type="text" placeholder="Type a message">
+  <button onclick="sendMessage()">Send</button>
+  <ul id="messages"></ul>
 
+  <!-- Socket.IO client library -->
+  <script src="/socket.io/socket.io.js"></script>
   <script>
-    // Auto-generate random username
-    const randomUsername = "User" + Math.floor(Math.random() * 10000);
-
-    // Connect to server (adjust if using ngrok public URL)
+    // Explicitly connect to the server at localhost:3000
     const socket = io("http://localhost:3000");
 
-    // Set username automatically on connect
-    socket.on("connect", () => {
-      socket.emit("set username", randomUsername);
-      addSystemMessage(`You are logged in as ${randomUsername}`);
-    });
+    const messages = document.getElementById('messages');
 
+    // Function to display messages
+    function addMessage(text) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      messages.appendChild(li);
+      messages.scrollTop = messages.scrollHeight; // Auto-scroll
+    }
+
+    // Receive messages from server
+    socket.on('chat message', (msg) => addMessage(msg));
+
+    // Send message to server
     function sendMessage() {
-      const msgInput = document.getElementById("msg");
-      const msg = msgInput.value.trim();
-      if (msg) {
-        socket.emit("chat message", msg);
-        msgInput.value = "";
+      const input = document.getElementById('msg');
+      if(input.value.trim() !== "") {
+        socket.emit('chat message', input.value);  // Send to server
+        addMessage("You: " + input.value);         // Display locally
+        input.value = "";
       }
     }
 
-    function addMessage(user, text, time) {
-      const chat = document.getElementById("chat");
-      const line = document.createElement("div");
-      line.className = "message";
-      line.textContent = `[${time}] ${user}: ${text}`;
-      chat.appendChild(line);
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    function addSystemMessage(text) {
-      const chat = document.getElementById("chat");
-      const line = document.createElement("div");
-      line.className = "system";
-      line.textContent = text;
-      chat.appendChild(line);
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    // Listen for chat events
-    socket.on("chat message", (data) => addMessage(data.user, data.text, data.time));
-    socket.on("user joined", (msg) => addSystemMessage(msg));
-    socket.on("user left", (msg) => addSystemMessage(msg));
-    socket.on("server shutdown", (data) => addSystemMessage(data.msg));
+    // Send message on Enter key
+    document.getElementById('msg').addEventListener("keypress", (e) => {
+      if(e.key === "Enter") sendMessage();
+    });
   </script>
 </body>
 </html>
