@@ -6,46 +6,118 @@
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
-    #messages { list-style: none; padding: 0; }
-    #messages li { padding: 5px 10px; border-bottom: 1px solid #ddd; }
-    #chatForm { margin-top: 10px; }
-    input { padding: 5px; width: 70%; }
-    button { padding: 5px 10px; }
+    #messages { list-style: none; padding: 0; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; margin-bottom: 10px; }
+    #messages li { padding: 5px 10px; border-bottom: 1px solid #eee; }
+    #chatForm { display: flex; }
+    #chatForm input { flex: 1; padding: 5px; }
+    #chatForm button { padding: 5px 10px; }
+    #inviteSection, #usernameSection { margin-bottom: 15px; }
   </style>
 </head>
 <body>
   <h1>Termux Chat</h1>
-  <ul id="messages"></ul>
+  
+  <!-- Invite Code Section -->
+  <div id="inviteSection">
+    <p>Enter the invite code to join:</p>
+    <input id="inviteInput" placeholder="Invite code" />
+    <button id="joinBtn">Join Chat</button>
+    <p id="inviteMessage" style="color:red;"></p>
+    <p>Your invite code for this session: <b id="inviteCode"></b></p>
+  </div>
 
-  <form id="chatForm">
-    <input id="messageInput" autocomplete="off" placeholder="Type a message..." />
-    <button>Send</button>
-  </form>
+  <!-- Username Section -->
+  <div id="usernameSection" style="display:none;">
+    <p>Enter your username:</p>
+    <input id="usernameInput" placeholder="Username" />
+    <button id="setUsernameBtn">Start Chat</button>
+    <p id="usernameMessage" style="color:red;"></p>
+  </div>
+
+  <!-- Chat Section -->
+  <div id="chatSection" style="display:none;">
+    <p>Messages received: <span id="msgCount">0</span></p>
+    <ul id="messages"></ul>
+    <form id="chatForm">
+      <input id="messageInput" autocomplete="off" placeholder="Type a message..." />
+      <button>Send</button>
+    </form>
+  </div>
 
   <script>
-    // TODO: Replace <TERMUX_IP> with your Termux device IP
-    const socket = io("http://localhost:3000");
+    // Generate random invite code
+    const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    document.getElementById('inviteCode').textContent = inviteCode;
 
-    const form = document.getElementById("chatForm");
-    const input = document.getElementById("messageInput");
-    const messages = document.getElementById("messages");
+    const joinBtn = document.getElementById('joinBtn');
+    const inviteInput = document.getElementById('inviteInput');
+    const inviteMessage = document.getElementById('inviteMessage');
+    const inviteSection = document.getElementById('inviteSection');
+    const usernameSection = document.getElementById('usernameSection');
+    const usernameInput = document.getElementById('usernameInput');
+    const setUsernameBtn = document.getElementById('setUsernameBtn');
+    const usernameMessage = document.getElementById('usernameMessage');
+    const chatSection = document.getElementById('chatSection');
 
-    // Send message to server
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (input.value) {
-        socket.emit("chat message", input.value);
-        input.value = "";
+    let socket;
+    let username = '';
+    let msgCount = 0;
+
+    // Step 1: Invite code check
+    joinBtn.addEventListener('click', () => {
+      const userCode = inviteInput.value.trim().toUpperCase();
+      if(userCode === inviteCode){
+        inviteMessage.textContent = '';
+        inviteSection.style.display = 'none';
+        usernameSection.style.display = 'block';
+      } else {
+        inviteMessage.textContent = 'Incorrect invite code!';
       }
     });
 
-    // Receive messages from server
-    socket.on("chat message", (msg) => {
-      const li = document.createElement("li");
-      li.textContent = msg;
-      messages.appendChild(li);
-      messages.scrollTop = messages.scrollHeight;
+    // Step 2: Set username
+    setUsernameBtn.addEventListener('click', () => {
+      const name = usernameInput.value.trim();
+      if(name.length > 0){
+        username = name;
+        usernameSection.style.display = 'none';
+        chatSection.style.display = 'block';
+        initChat();
+      } else {
+        usernameMessage.textContent = 'Please enter a username.';
+      }
     });
+
+    // Step 3: Initialize chat
+    function initChat() {
+      // Replace with your Termux IP
+      socket = io("http://localhost:3000");
+
+      const form = document.getElementById("chatForm");
+      const input = document.getElementById("messageInput");
+      const messages = document.getElementById("messages");
+      const msgCountEl = document.getElementById("msgCount");
+
+      // Send message
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (input.value) {
+          socket.emit("chat message", username + ": " + input.value);
+          input.value = "";
+        }
+      });
+
+      // Receive messages
+      socket.on("chat message", (msg) => {
+        const li = document.createElement("li");
+        li.textContent = msg;
+        messages.appendChild(li);
+        messages.scrollTop = messages.scrollHeight;
+
+        msgCount++;
+        msgCountEl.textContent = msgCount;
+      });
+    }
   </script>
 </body>
 </html>
