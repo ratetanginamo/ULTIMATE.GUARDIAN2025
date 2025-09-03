@@ -2,22 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Termux Chat Client</title>
+  <title>Termux Chat</title>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #messages { list-style: none; padding: 0; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; margin-bottom: 10px; }
-    #messages li { padding: 5px 10px; border-bottom: 1px solid #eee; }
-    #chatForm { display: flex; }
-    #chatForm input { flex: 1; padding: 5px; }
-    #chatForm button { padding: 5px 10px; }
-    #inviteSection, #usernameSection { margin-bottom: 15px; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; display: flex; flex-direction: column; height: 100vh; }
+    header { background: #4a90e2; color: white; padding: 15px; text-align: center; }
+    #chatContainer { flex: 1; display: flex; flex-direction: column; padding: 10px; overflow-y: auto; }
+    .message { max-width: 70%; padding: 10px; margin: 5px; border-radius: 15px; word-wrap: break-word; }
+    .myMsg { background: #4a90e2; color: white; align-self: flex-end; }
+    .otherMsg { background: #e0e0e0; color: black; align-self: flex-start; }
+    #chatForm { display: flex; padding: 10px; border-top: 1px solid #ccc; background: white; }
+    #chatForm input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; margin-right: 10px; }
+    #chatForm button { padding: 10px 20px; border: none; border-radius: 20px; background: #4a90e2; color: white; cursor: pointer; }
+    #inviteSection, #usernameSection { padding: 20px; background: white; margin: 10px; border-radius: 10px; }
+    #msgCount { font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>Termux Chat</h1>
-  
-  <!-- Invite Code Section -->
+  <header>
+    <h1>Termux Chat</h1>
+    <p>Messages received: <span id="msgCount">0</span></p>
+  </header>
+
   <div id="inviteSection">
     <p>Enter the invite code to join:</p>
     <input id="inviteInput" placeholder="Invite code" />
@@ -26,7 +32,6 @@
     <p>Your invite code for this session: <b id="inviteCode"></b></p>
   </div>
 
-  <!-- Username Section -->
   <div id="usernameSection" style="display:none;">
     <p>Enter your username:</p>
     <input id="usernameInput" placeholder="Username" />
@@ -34,10 +39,8 @@
     <p id="usernameMessage" style="color:red;"></p>
   </div>
 
-  <!-- Chat Section -->
   <div id="chatSection" style="display:none;">
-    <p>Messages received: <span id="msgCount">0</span></p>
-    <ul id="messages"></ul>
+    <div id="chatContainer"></div>
     <form id="chatForm">
       <input id="messageInput" autocomplete="off" placeholder="Type a message..." />
       <button>Send</button>
@@ -45,8 +48,7 @@
   </div>
 
   <script>
-    // Generate random invite code
-    const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
     document.getElementById('inviteCode').textContent = inviteCode;
 
     const joinBtn = document.getElementById('joinBtn');
@@ -58,15 +60,17 @@
     const setUsernameBtn = document.getElementById('setUsernameBtn');
     const usernameMessage = document.getElementById('usernameMessage');
     const chatSection = document.getElementById('chatSection');
+    const chatContainer = document.getElementById('chatContainer');
+    const msgCountEl = document.getElementById('msgCount');
 
     let socket;
     let username = '';
     let msgCount = 0;
 
-    // Step 1: Invite code check
+    // Invite code check
     joinBtn.addEventListener('click', () => {
-      const userCode = inviteInput.value.trim().toUpperCase();
-      if(userCode === inviteCode){
+      const code = inviteInput.value.trim().toUpperCase();
+      if(code === inviteCode){
         inviteMessage.textContent = '';
         inviteSection.style.display = 'none';
         usernameSection.style.display = 'block';
@@ -75,48 +79,53 @@
       }
     });
 
-    // Step 2: Set username
+    // Username
     setUsernameBtn.addEventListener('click', () => {
       const name = usernameInput.value.trim();
       if(name.length > 0){
         username = name;
         usernameSection.style.display = 'none';
-        chatSection.style.display = 'block';
+        chatSection.style.display = 'flex';
         initChat();
       } else {
         usernameMessage.textContent = 'Please enter a username.';
       }
     });
 
-    // Step 3: Initialize chat
     function initChat() {
-      // Replace with your Termux IP
+      // Connect to Termux server (replace with your IP)
       socket = io("http://localhost:3000");
+      const room = inviteCode;
+      socket.emit("join room", room);
 
       const form = document.getElementById("chatForm");
       const input = document.getElementById("messageInput");
-      const messages = document.getElementById("messages");
-      const msgCountEl = document.getElementById("msgCount");
 
-      // Send message
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        if (input.value) {
-          socket.emit("chat message", username + ": " + input.value);
-          input.value = "";
+        if(input.value){
+          socket.emit("chat message", { room, message: username + ": " + input.value });
+          addMessage(username + ": " + input.value, true);
+          input.value = '';
         }
       });
 
-      // Receive messages
-      socket.on("chat message", (msg) => {
-        const li = document.createElement("li");
-        li.textContent = msg;
-        messages.appendChild(li);
-        messages.scrollTop = messages.scrollHeight;
-
-        msgCount++;
-        msgCountEl.textContent = msgCount;
+      socket.on("chat message", ({ message, sender }) => {
+        // Ignore messages sent by yourself (already displayed)
+        if(sender !== username){
+          addMessage(message, false);
+        }
       });
+    }
+
+    function addMessage(text, myMsg){
+      const div = document.createElement('div');
+      div.textContent = text;
+      div.className = 'message ' + (myMsg ? 'myMsg' : 'otherMsg');
+      chatContainer.appendChild(div);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      msgCount++;
+      msgCountEl.textContent = msgCount;
     }
   </script>
 </body>
