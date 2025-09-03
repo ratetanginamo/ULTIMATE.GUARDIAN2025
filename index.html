@@ -2,131 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Termux Chat</title>
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <title>Auto Chat Web</title>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; display: flex; flex-direction: column; height: 100vh; }
-    header { background: #4a90e2; color: white; padding: 15px; text-align: center; }
-    #chatContainer { flex: 1; display: flex; flex-direction: column; padding: 10px; overflow-y: auto; }
-    .message { max-width: 70%; padding: 10px; margin: 5px; border-radius: 15px; word-wrap: break-word; }
-    .myMsg { background: #4a90e2; color: white; align-self: flex-end; }
-    .otherMsg { background: #e0e0e0; color: black; align-self: flex-start; }
-    #chatForm { display: flex; padding: 10px; border-top: 1px solid #ccc; background: white; }
-    #chatForm input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; margin-right: 10px; }
-    #chatForm button { padding: 10px 20px; border: none; border-radius: 20px; background: #4a90e2; color: white; cursor: pointer; }
-    #inviteSection, #usernameSection { padding: 20px; background: white; margin: 10px; border-radius: 10px; }
-    #msgCount { font-weight: bold; }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 10px; }
+    #msg { width: 80%; padding: 5px; }
+    #send { padding: 5px 10px; }
+    .system { color: gray; font-style: italic; }
+    .message { margin-bottom: 5px; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Termux Chat</h1>
-    <p>Messages received: <span id="msgCount">0</span></p>
-  </header>
-
-  <div id="inviteSection">
-    <p>Enter the invite code to join:</p>
-    <input id="inviteInput" placeholder="Invite code" />
-    <button id="joinBtn">Join Chat</button>
-    <p id="inviteMessage" style="color:red;"></p>
-    <p>Your invite code for this session: <b id="inviteCode"></b></p>
-  </div>
-
-  <div id="usernameSection" style="display:none;">
-    <p>Enter your username:</p>
-    <input id="usernameInput" placeholder="Username" />
-    <button id="setUsernameBtn">Start Chat</button>
-    <p id="usernameMessage" style="color:red;"></p>
-  </div>
-
-  <div id="chatSection" style="display:none;">
-    <div id="chatContainer"></div>
-    <form id="chatForm">
-      <input id="messageInput" autocomplete="off" placeholder="Type a message..." />
-      <button>Send</button>
-    </form>
-  </div>
+  <h1>Auto Chat Web</h1>
+  <div id="chat"></div>
+  <input id="msg" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage()">
+  <button id="send" onclick="sendMessage()">Send</button>
 
   <script>
-    const inviteCode = Math.random().toString(36).substring(2,8).toUpperCase();
-    document.getElementById('inviteCode').textContent = inviteCode;
+    // Auto-generate random username
+    const randomUsername = "User" + Math.floor(Math.random() * 10000);
 
-    const joinBtn = document.getElementById('joinBtn');
-    const inviteInput = document.getElementById('inviteInput');
-    const inviteMessage = document.getElementById('inviteMessage');
-    const inviteSection = document.getElementById('inviteSection');
-    const usernameSection = document.getElementById('usernameSection');
-    const usernameInput = document.getElementById('usernameInput');
-    const setUsernameBtn = document.getElementById('setUsernameBtn');
-    const usernameMessage = document.getElementById('usernameMessage');
-    const chatSection = document.getElementById('chatSection');
-    const chatContainer = document.getElementById('chatContainer');
-    const msgCountEl = document.getElementById('msgCount');
+    // Connect to server (adjust if using ngrok public URL)
+    const socket = io("http://localhost:3000");
 
-    let socket;
-    let username = '';
-    let msgCount = 0;
-
-    // Invite code check
-    joinBtn.addEventListener('click', () => {
-      const code = inviteInput.value.trim().toUpperCase();
-      if(code === inviteCode){
-        inviteMessage.textContent = '';
-        inviteSection.style.display = 'none';
-        usernameSection.style.display = 'block';
-      } else {
-        inviteMessage.textContent = 'Incorrect invite code!';
-      }
+    // Set username automatically on connect
+    socket.on("connect", () => {
+      socket.emit("set username", randomUsername);
+      addSystemMessage(`You are logged in as ${randomUsername}`);
     });
 
-    // Username
-    setUsernameBtn.addEventListener('click', () => {
-      const name = usernameInput.value.trim();
-      if(name.length > 0){
-        username = name;
-        usernameSection.style.display = 'none';
-        chatSection.style.display = 'flex';
-        initChat();
-      } else {
-        usernameMessage.textContent = 'Please enter a username.';
+    function sendMessage() {
+      const msgInput = document.getElementById("msg");
+      const msg = msgInput.value.trim();
+      if (msg) {
+        socket.emit("chat message", msg);
+        msgInput.value = "";
       }
-    });
-
-    function initChat() {
-      // Connect to Termux server (replace with your IP)
-      socket = io("http://localhost:3000");
-      const room = inviteCode;
-      socket.emit("join room", room);
-
-      const form = document.getElementById("chatForm");
-      const input = document.getElementById("messageInput");
-
-      form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        if(input.value){
-          socket.emit("chat message", { room, message: username + ": " + input.value });
-          addMessage(username + ": " + input.value, true);
-          input.value = '';
-        }
-      });
-
-      socket.on("chat message", ({ message, sender }) => {
-        // Ignore messages sent by yourself (already displayed)
-        if(sender !== username){
-          addMessage(message, false);
-        }
-      });
     }
 
-    function addMessage(text, myMsg){
-      const div = document.createElement('div');
-      div.textContent = text;
-      div.className = 'message ' + (myMsg ? 'myMsg' : 'otherMsg');
-      chatContainer.appendChild(div);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-      msgCount++;
-      msgCountEl.textContent = msgCount;
+    function addMessage(user, text, time) {
+      const chat = document.getElementById("chat");
+      const line = document.createElement("div");
+      line.className = "message";
+      line.textContent = `[${time}] ${user}: ${text}`;
+      chat.appendChild(line);
+      chat.scrollTop = chat.scrollHeight;
     }
+
+    function addSystemMessage(text) {
+      const chat = document.getElementById("chat");
+      const line = document.createElement("div");
+      line.className = "system";
+      line.textContent = text;
+      chat.appendChild(line);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // Listen for chat events
+    socket.on("chat message", (data) => addMessage(data.user, data.text, data.time));
+    socket.on("user joined", (msg) => addSystemMessage(msg));
+    socket.on("user left", (msg) => addSystemMessage(msg));
+    socket.on("server shutdown", (data) => addSystemMessage(data.msg));
   </script>
 </body>
 </html>
